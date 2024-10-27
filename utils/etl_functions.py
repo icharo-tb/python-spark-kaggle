@@ -1,10 +1,16 @@
 from .singletons import Spark
 from pyspark.sql import DataFrame
 import kagglehub
+import psycopg2
 
 from .config import KAGGLE_API_KEY
 from .regex_functions import find_csv_files, move_csv_files
 from utils.spark_logger import get_logger
+
+import os
+from dotenv import load_dotenv
+
+load_dotenv
 
 logger = get_logger('test_mock_csv')
 spark = Spark().get_spark_session()
@@ -86,3 +92,20 @@ def load_logger(func):
         logger.info(f"[LOAD] Completed loading: {result}")
         return result
     return wrapper
+
+def load_postgre(df: DataFrame, schema: str, table: str) -> str:
+
+    try:
+        df.write \
+            .format("jdbc") \
+            .option("url", os.getenv('POSTGRE_URL')) \
+            .option("dbtable", f'{schema}.{table}') \
+            .option("user", os.getenv('POSTGRE_USER')) \
+            .option("password", os.getenv('POSTGRE_PASSWORD')) \
+            .option("driver", "org.postgresql.Driver") \
+            .mode("append")\
+            .save()
+        
+        logger.info(f'Data loaded to PostgreSQL successfully.')
+    except Exception as e:
+        logger.info(f'ERROR: {e}')

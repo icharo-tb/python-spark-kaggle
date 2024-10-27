@@ -2,7 +2,7 @@ from utils.etl_functions import read_csv, extract_logger, transform_logger, load
 from utils.singletons import Logger, Spark
 
 from pyspark.sql import DataFrame, SparkSession
-from pyspark.sql.functions import col, lit, avg, substr, when, length, count, round, rank, dense_rank
+from pyspark.sql.functions import *
 from pyspark.sql import Window
 from pyspark.sql.types import IntegerType, DataType
 
