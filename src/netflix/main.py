@@ -1,4 +1,4 @@
-from utils.etl_functions import read_csv, extract_logger, transform_logger, load_logger, load_postgre
+from utils.etl_functions import read_csv, extract_logger, transform_logger, load_logger, load_postgre, create_postgre_staging, get_postgre_conn
 from utils.singletons import Logger
 
 from pyspark.sql import DataFrame
@@ -60,12 +60,57 @@ def load(df_dict: dict) -> Optional[DataFrame]:
 
     df: DataFrame = df_dict['df']
 
+    conn = get_postgre_conn()
+    cursor = conn.cursor()
+
     schema = 'netflix'
     table = 'media'
 
-    load_postgre(df, schema, table)
+    dest_table = f'{schema}.{table}'
 
-    df.show()
+    staging_table = create_postgre_staging(df, table, schema)
+
+    # MERGE only works on PostgreSQL 15 or upper (else, use conventional UPSERT)
+    merge_query = f"""
+    BEGIN;
+    MERGE INTO {dest_table} t1
+    USING {schema}.{staging_table} t2
+    ON t1.show_id = t2.show_id
+    WHEN MATCHED THEN
+        UPDATE SET
+            type = t2.type,
+            title = t2.title,
+            country = t2.country,
+            release_year = t2.release_year,
+            duration = t2.duration,
+            listed_in = t2.listed_in,
+            description = t2.description,
+            rating = t2.rating
+    WHEN NOT MATCHED THEN
+        INSERT (date_issued, show_id, type, title, country, release_year, duration, listed_in, description, rating)
+        VALUES (t2.date_issued, t2.show_id, t2.type, t2.title, t2.country, t2.release_year, t2.duration, t2.listed_in, t2.description, t2.rating);
+    ANALYZE {dest_table};
+    DROP TABLE IF EXISTS {schema}.{staging_table};
+    END;
+    """
+
+    try:
+        pg_version = conn.server_version
+        logger.info(f'PG_VERSION: {pg_version}')
+        cursor.execute(merge_query)
+        conn.commit()
+        logger.info(f'Table MERGE successfully completed.')
+        #load_postgre(df, schema, table)
+    except Exception as e:
+        logger.info(f'ERROR: {e}')
+    finally:
+        cursor.execute(f'DROP TABLE IF EXISTS {schema}.{staging_table};')
+        conn.commit()
+
+    cursor.close()
+    conn.close()
+
+    logger.info(f'df: {df.show()}')
 
 def main(paths: list):
 

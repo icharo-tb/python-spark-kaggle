@@ -3,12 +3,14 @@ from pyspark.sql import DataFrame
 import kagglehub
 import psycopg2
 
-from .config import KAGGLE_API_KEY
+from .config import load_config
 from .regex_functions import find_csv_files, move_csv_files
 from utils.spark_logger import get_logger
 
 import os
 from dotenv import load_dotenv
+from datetime import datetime
+from typing import Optional
 
 load_dotenv
 
@@ -108,4 +110,94 @@ def load_postgre(df: DataFrame, schema: str, table: str) -> str:
         
         logger.info(f'Data loaded to PostgreSQL successfully.')
     except Exception as e:
-        logger.info(f'ERROR: {e}')
+        logger.info(f'Could not load table into {schema}.{table}\nERROR: {e}')
+
+def create_postgre_staging(df: DataFrame, base_table_name: str, db_schema: str) -> str:
+
+    """
+    Create and return a PostgreSQL staging table name.
+
+    Args:
+        df (DataFrame): Table dataframe
+        base_table_name (str): Base dataframe table name
+        db_schema (str): PostgreSQL schema
+    
+    Returns:
+        str: Staging table name
+    """
+
+    conf = load_config()
+
+    # Create a connection to PostgreSQL
+    conn = psycopg2.connect(**conf)
+    cursor = conn.cursor()
+    
+    # Generate a new table name based on the current date
+    current_date = datetime.now().strftime("%Y_%m_%d")
+    staging_table_name = f"_staging_{base_table_name}_{current_date}"
+    
+    # Create the staging table SQL statement based on the DataFrame schema
+    schema = df.schema
+    columns = []
+    
+    for field in schema.fields:
+        # Map PySpark data types to PostgreSQL types
+        if field.dataType.typeName() == 'string':
+            columns.append(f"{field.name} VARCHAR")
+        elif field.dataType.typeName() == 'integer':
+            columns.append(f"{field.name} INTEGER")
+        elif field.dataType.typeName() == 'double':
+            columns.append(f"{field.name} DOUBLE PRECISION")
+        elif field.dataType.typeName() == 'date':
+            columns.append(f"{field.name} DATE")
+        # Add more data types as needed
+
+    try:
+        create_table_query = f"""
+        CREATE TABLE IF NOT EXISTS {db_schema}.{staging_table_name} (
+            {', '.join(columns)}
+        );
+        """
+    
+        # Execute the create table query
+        cursor.execute(create_table_query)
+        conn.commit()
+
+        # Write DataFrame to the new staging table
+        df.write \
+            .format("jdbc") \
+            .option("url", os.getenv('POSTGRE_URL')) \
+            .option("dbtable", f'{db_schema}.{staging_table_name}') \
+            .option("user", os.getenv('POSTGRE_USER')) \
+            .option("password", os.getenv('POSTGRE_PASSWORD')) \
+            .option("driver", "org.postgresql.Driver") \
+            .mode("append")\
+            .save()
+    except Exception as e:
+        logger.info(f'Staging table {db_schema}.{staging_table_name} already exists.\nERROR: {e}')
+    
+    # Close the cursor and connection
+    cursor.close()
+    conn.close()
+    
+    return staging_table_name
+
+def get_postgre_conn() -> Optional[psycopg2.extensions.connection]:
+
+    """
+    Create and return a PostgreSQL database connection.
+
+    Return:
+        Optional[psycopg2.extensions.connection]: psycopg2 connection object
+    """
+
+    try:
+        conf = load_config()
+
+        # Create a connection to PostgreSQL
+        conn = psycopg2.connect(**conf)
+
+        return conn
+    except Exception as e:
+        logger.info(f"Could not retrieve PostgreSQl conn.\nERROR: {e}")
+        return None
