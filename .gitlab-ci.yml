@@ -1,0 +1,12 @@
+stages:
+  - zip
+
+zip_folder:
+  stage: zip
+  script:
+    - echo "Zipping utils..."
+    - zip -r modules/utils.zip utils/
+    - echo "Utils zipped."
+  artifacts:
+    paths:
+      - modules/utils.zip
