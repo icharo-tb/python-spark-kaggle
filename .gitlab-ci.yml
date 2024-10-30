@@ -3,6 +3,7 @@ stages:
   - test_ssh
 
 test_ssh:
+  stage: test_ssh
   script:
     - ssh -T git@gitlab.com
 
