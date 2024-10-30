@@ -1,8 +1,16 @@
 stages:
   - zip
+  - test_ssh
+
+test_ssh:
+  script:
+    - ssh -T git@gitlab.com
 
 zip:
   stage: zip
+  before_script:
+    - eval "$(ssh-agent -s)"
+    - ssh-add ~/.ssh/id_rsa.pub
   script:
     - echo "Zipping utils..."
     - zip -r modules/utils.zip utils/
