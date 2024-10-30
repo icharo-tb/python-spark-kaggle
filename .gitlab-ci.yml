@@ -1,7 +1,7 @@
 stages:
   - zip
 
-zip_folder:
+zip:
   stage: zip
   script:
     - echo "Zipping utils..."
