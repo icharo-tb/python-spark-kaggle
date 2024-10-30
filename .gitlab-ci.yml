@@ -1,6 +1,6 @@
 stages:
-  - zip
   - test_ssh
+  - zip
 
 test_ssh:
   stage: test_ssh
