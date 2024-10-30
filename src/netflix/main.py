@@ -1,4 +1,4 @@
-from utils.etl_functions import read_csv, extract_logger, transform_logger, load_logger, load_postgre, create_postgre_staging, get_postgre_conn
+from utils.etl_functions import read_csv, extract_logger, transform_logger, load_logger, create_postgre_staging, get_postgre_conn
 from utils.singletons import Logger
 
 from pyspark.sql import DataFrame
@@ -18,8 +18,8 @@ def extract(paths: list, date: str = None) -> Optional[dict[str, DataFrame]]:
 
             try:
                 df = read_csv(path)
-                logger.info(f'Extracting dataset: {path.split("/")[6].split("/")[0]}')
-                datasets[path.split('/')[6].split('.')[0]] = df
+                logger.info(f'Extracting dataset: {path.split("/")[7].split("/")[0]}')
+                datasets[path.split('/')[7].split('.')[0]] = df
                 logger.info('Data successfully extracted.')
             except Exception as e:
                 logger.info('Dataset is empty or does not exists.')
@@ -39,7 +39,7 @@ def transform(df_map: dict, date: str) -> Optional[dict[str, DataFrame]]:
     df = df_date.select(
          col('date_issued').cast("int"),
          col('show_id'),
-         col('type'),
+         col('type').alias('media_type'),
          col('title'),
          col('country'),
          col('release_year').cast("int"),
@@ -64,7 +64,7 @@ def load(df_dict: dict) -> Optional[DataFrame]:
     cursor = conn.cursor()
 
     schema = 'netflix'
-    table = 'media'
+    table = 'netflix_media'
 
     dest_table = f'{schema}.{table}'
 
@@ -76,9 +76,10 @@ def load(df_dict: dict) -> Optional[DataFrame]:
     MERGE INTO {dest_table} t1
     USING {schema}.{staging_table} t2
     ON t1.show_id = t2.show_id
+    AND t1.date_issued = t2.date_issued
     WHEN MATCHED THEN
         UPDATE SET
-            type = t2.type,
+            media_type = t2.media_type,
             title = t2.title,
             country = t2.country,
             release_year = t2.release_year,
@@ -87,8 +88,8 @@ def load(df_dict: dict) -> Optional[DataFrame]:
             description = t2.description,
             rating = t2.rating
     WHEN NOT MATCHED THEN
-        INSERT (date_issued, show_id, type, title, country, release_year, duration, listed_in, description, rating)
-        VALUES (t2.date_issued, t2.show_id, t2.type, t2.title, t2.country, t2.release_year, t2.duration, t2.listed_in, t2.description, t2.rating);
+        INSERT (date_issued, show_id, media_type, title, country, release_year, duration, listed_in, description, rating)
+        VALUES (t2.date_issued, t2.show_id, t2.media_type, t2.title, t2.country, t2.release_year, t2.duration, t2.listed_in, t2.description, t2.rating);
     ANALYZE {dest_table};
     DROP TABLE IF EXISTS {schema}.{staging_table};
     END;
@@ -119,7 +120,7 @@ def main(paths: list):
     load(transform_res)
 
 if __name__ == "__main__":
-    paths: list = [r'/home/daniel-kairos/workspace/python-spark/assets/netflix_movies.csv']
-    file_type = paths[0].split('/')[6].split('.')[1]
+    paths: list = [r'/home/daniel-kairos/workspace/python-projects/python-spark/assets/netflix_movies.csv']
+    file_type = paths[0].split('/')[7].split('.')[1]
 
     main(paths)
