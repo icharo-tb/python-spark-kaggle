@@ -8,7 +8,7 @@ class Spark:
         if cls._instance is None:
             cls._instance = super(Spark, cls).__new__(cls)
             cls._instance.spark = SparkSession.builder\
-                .config("spark.jars", r"/home/daniel-kairos/workspace/python-projects/python-spark/libs/postgresql-42.7.3.jar")\
+                .config("spark.jars", "./libs/postgresql-42.7.3.jar")\
                 .appName("Test")\
                 .getOrCreate()
         return cls._instance

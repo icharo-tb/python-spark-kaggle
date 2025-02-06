@@ -18,14 +18,14 @@ def extract(paths: list) -> dict:
 
     for path in paths:
 
-            try:
-                df = read_csv(path)
-                logger.info(f'Extracting dataset: {path.split("/")[6].split("/")[0]}')
-                datasets[path.split('/')[6].split('.')[0]] = df
-                logger.info('Data successfully extracted.')
-            except Exception as e:
-                logger.info('Dataset is empty or does not exists.')
-                logger.info(e)
+        try:
+            df = read_csv(path)
+            logger.info(f'Extracting dataset: {path.split("/")[2].split(".")[0]}')
+            datasets[path.split('/')[2].split('.')[0]] = df
+            logger.info('Data successfully extracted.')
+        except Exception as e:
+            logger.info('Dataset is empty or does not exists.')
+            logger.info(e)
 
     return datasets
 
@@ -114,13 +114,13 @@ def transform(df_map: dict, date: str) -> dict:
             SELECT
                 type,
                 country,
-                case
-                    when length(duration) = 7
-                        then cast( substr(duration, 1, 4) as int )
-                    when length(duration) < 7
-                        then cast( substr(duration, 1, 3) as int )
-                    else 0
-                end as duration
+                CASE
+                    WHEN LENGTH(duration) = 7
+                        THEN CAST( SUBSTR(duration, 1, 4) AS INT )
+                    WHEN LENGTH(duration) < 7
+                        THEN CAST( SUBSTR(duration, 1, 3) AS INT )
+                    ELSE 0
+                END AS duration
             FROM mock_data
             WHERE country IS NOT NULL
             and duration like '%min%'
@@ -131,19 +131,20 @@ def transform(df_map: dict, date: str) -> dict:
                 AVG(duration) OVER(PARTITION BY country ORDER BY duration ASC) as avg_duration
             FROM durations
             WHERE (country NOT LIKE '%,%' AND country NOT LIKE '%"%')
-            GROUP BY type, country, duration
         )
 
         SELECT
             type,
             country,
-            ROUND(avg_duration, 2) as avg_duration
-        FROM durations_avg;
+            MAX(CAST(avg_duration AS INT)) AS max_avg_duration,
+            MIN(CAST(avg_duration AS INT)) AS min_avg_duration
+        FROM durations_avg
+        GROUP BY type, country;
         '''
     )
 
     datasets: dict[str, DataFrame] = {
-        'df': df0
+        'df': df3
     }
 
     return datasets
@@ -162,7 +163,7 @@ def main(paths: list):
     load(transform_res)
 
 if __name__ == "__main__":
-    paths: list = [r'/home/daniel-kairos/workspace/python-spark/assets/netflix_movies.csv']
-    file_type = paths[0].split('/')[6].split('.')[1]
+    paths: list = ['./assets/netflix_movies.csv']
+    file_type = paths[0].split('/')[2].split('.')[1]
 
     main(paths)
